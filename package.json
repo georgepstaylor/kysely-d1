@@ -3,7 +3,7 @@
   "description": "Kysely dialect for Cloudflare D1",
   "main": "./dist/index.cjs",
   "module": "./dist/index.js",
-  "version": "0.5.0",
+  "version": "0.5.1",
   "types": "./dist/index.d.ts",
   "repository": "git@github.com:georgepstaylor/kysely-d1.git",
   "author": "George <3026030+georgepstaylor@users.noreply.github.com>",

@@ -115,9 +115,7 @@ class D1Connection implements DatabaseConnection {
           ? undefined
           : BigInt(results.meta.last_row_id),
       rows: (results?.results as O[]) || [],
-      numAffectedRows,
-      // @ts-ignore deprecated in kysely >= 0.23, keep for backward compatibility.
-      numUpdatedOrDeletedRows: numAffectedRows,
+      numAffectedRows, // requires kysely >= 0.23
     };
   }
 
