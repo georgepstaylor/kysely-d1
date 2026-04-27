@@ -1,12 +1,12 @@
 {
-  "name": "kysely-d1",
+  "name": "@georgepstaylor/kysely-d1",
   "description": "Kysely dialect for Cloudflare D1",
   "main": "./dist/index.cjs",
   "module": "./dist/index.js",
-  "version": "0.4.0",
+  "version": "0.5.0",
   "types": "./dist/index.d.ts",
-  "repository": "git@github.com:aidenwallis/kysely-d1.git",
-  "author": "Aiden <aiden@aidenwallis.co.uk>",
+  "repository": "git@github.com:georgepstaylor/kysely-d1.git",
+  "author": "George <3026030+georgepstaylor@users.noreply.github.com>",
   "license": "MIT",
   "type": "module",
   "exports": {
