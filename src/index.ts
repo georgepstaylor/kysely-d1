@@ -2,14 +2,19 @@ import {
   CompiledQuery,
   DatabaseConnection,
   DatabaseIntrospector,
+  DatabaseMetadata,
+  DatabaseMetadataOptions,
+  DEFAULT_MIGRATION_LOCK_TABLE,
+  DEFAULT_MIGRATION_TABLE,
   Dialect,
   Driver,
   Kysely,
-  SqliteAdapter,
-  SqliteIntrospector,
-  SqliteQueryCompiler,
   QueryCompiler,
   QueryResult,
+  SchemaMetadata,
+  SqliteAdapter,
+  SqliteQueryCompiler,
+  TableMetadata,
 } from 'kysely';
 import type { D1Database } from '@cloudflare/workers-types';
 
@@ -52,8 +57,89 @@ export class D1Dialect implements Dialect {
     return new SqliteQueryCompiler();
   }
 
-  createIntrospector(db: Kysely<any>): DatabaseIntrospector {
-    return new SqliteIntrospector(db);
+  createIntrospector(_db: Kysely<any>): DatabaseIntrospector {
+    return new D1Introspector(this.#config.database);
+  }
+}
+
+class D1Introspector implements DatabaseIntrospector {
+  #d1: D1Database;
+
+  constructor(d1: D1Database) {
+    this.#d1 = d1;
+  }
+
+  async getSchemas(): Promise<SchemaMetadata[]> {
+    return [];
+  }
+
+  async getTables(options: DatabaseMetadataOptions = { withInternalKyselyTables: false }): Promise<TableMetadata[]> {
+    // Filter D1's internal `_cf_*` tables (e.g. `_cf_KV`, `_cf_METADATA`); these
+    // exist in `sqlite_master` but are not user tables and break naive consumers
+    // (e.g. better-auth's migrate command).
+    let query = "SELECT name, sql FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%' AND name NOT LIKE '_cf_%'";
+    const params: string[] = [];
+    if (!options.withInternalKyselyTables) {
+      query += ' AND name != ? AND name != ?';
+      params.push(DEFAULT_MIGRATION_TABLE, DEFAULT_MIGRATION_LOCK_TABLE);
+    }
+    query += ' ORDER BY name';
+
+    const tablesResult = await this.#d1
+      .prepare(query)
+      .bind(...params)
+      .all<{ name: string; sql: string | null }>();
+    const tables = tablesResult.results ?? [];
+
+    if (tables.length === 0) return [];
+
+    // Fetch column metadata in a single batched round-trip rather than
+    // Kysely's default `Promise.all` fan-out, which can swamp D1 on schemas
+    // with many tables.
+    const stmts = tables.map((t) => this.#d1.prepare('SELECT * FROM pragma_table_info(?)').bind(t.name));
+    const batchResults = await this.#d1.batch<{
+      cid: number;
+      name: string;
+      type: string;
+      notnull: number;
+      dflt_value: string | null;
+      pk: number;
+    }>(stmts);
+
+    return tables.map((table, i) => {
+      const cols = batchResults[i]?.results ?? [];
+
+      let autoIncrementCol = table.sql
+        ?.split(/[(),]/)
+        ?.find((s) => s.toLowerCase().includes('autoincrement'))
+        ?.trimStart()
+        ?.split(/\s+/)?.[0]
+        ?.replace(/["`]/g, '');
+
+      // `INTEGER PRIMARY KEY` is an implicit rowid alias and auto-increments
+      // even without the explicit AUTOINCREMENT keyword.
+      if (!autoIncrementCol) {
+        const pkCols = cols.filter((c) => c.pk > 0);
+        if (pkCols.length === 1 && pkCols[0].type.toLowerCase() === 'integer') {
+          autoIncrementCol = pkCols[0].name;
+        }
+      }
+
+      return {
+        name: table.name,
+        columns: cols.map((c) => ({
+          name: c.name,
+          dataType: c.type,
+          isNullable: !c.notnull,
+          isAutoIncrementing: c.name === autoIncrementCol,
+          hasDefaultValue: c.dflt_value != null,
+        })),
+      };
+    });
+  }
+
+  async getMetadata(options?: DatabaseMetadataOptions): Promise<DatabaseMetadata> {
+    return { tables: await this.getTables(options) };
   }
 }
 
