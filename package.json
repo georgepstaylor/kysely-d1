@@ -5,10 +5,17 @@
   "module": "./dist/index.js",
   "version": "0.5.1",
   "types": "./dist/index.d.ts",
-  "repository": "git@github.com:georgepstaylor/kysely-d1.git",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/georgepstaylor/kysely-d1.git"
+  },
   "author": "George <3026030+georgepstaylor@users.noreply.github.com>",
   "license": "MIT",
   "type": "module",
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  },
   "exports": {
     ".": {
       "import": "./dist/index.js",
